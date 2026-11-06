@@ -1,0 +1,6 @@
+{
+  "name": "SquadDo: Accountability To-Do",
+  "description": "Real-time accountability to-do app to share tasks with friends, track mutual progress, nudge buddies, and celebrate completed goals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
