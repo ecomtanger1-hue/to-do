@@ -161,6 +161,7 @@ fun ActivityPill(activity: SquadActivity) {
         ActivityType.NUDGE_SENT -> "⚡"
         ActivityType.STREAK_ACHIEVED -> "🔥"
         ActivityType.TASK_CREATED -> "📝"
+        ActivityType.FRIEND_JOINED -> "🤝"
     }
 
     Surface(

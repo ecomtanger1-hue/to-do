@@ -78,7 +78,19 @@ fun SupabaseConfigDialog(
     var copiedNotice by remember { mutableStateOf(false) }
 
     val sqlSchemaText = """
--- 1. Create tasks table
+-- 1. Create profiles table (for user accounts & finding friends by @handle)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    handle TEXT UNIQUE NOT NULL,
+    email TEXT,
+    avatar TEXT DEFAULT '🚀',
+    bio TEXT,
+    streak_days INT DEFAULT 1,
+    created_at BIGINT NOT NULL
+);
+
+-- 2. Create tasks table
 CREATE TABLE IF NOT EXISTS public.tasks (
     id TEXT PRIMARY KEY,
     squad_id TEXT NOT NULL DEFAULT 'squad_general',
@@ -98,7 +110,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     cheer_count INT DEFAULT 0
 );
 
--- 2. Create squad_activities table
+-- 3. Create squad_activities table
 CREATE TABLE IF NOT EXISTS public.squad_activities (
     id TEXT PRIMARY KEY,
     squad_id TEXT NOT NULL DEFAULT 'squad_general',
@@ -111,9 +123,10 @@ CREATE TABLE IF NOT EXISTS public.squad_activities (
     timestamp BIGINT NOT NULL
 );
 
--- 3. ENABLE SUPABASE REALTIME (Crucial for low-latency sync)
+-- 4. ENABLE SUPABASE REALTIME (Crucial for low-latency sync)
 ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.squad_activities;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
     """.trimIndent()
 
     Dialog(onDismissRequest = onDismiss) {

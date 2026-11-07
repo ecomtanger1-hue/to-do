@@ -3,6 +3,7 @@ package com.example.data.remote
 import android.util.Log
 import com.example.data.model.RealtimeStatus
 import com.example.data.model.TaskItem
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,11 +38,15 @@ sealed class RealtimeEvent {
     data class TaskCreated(val task: TaskItem) : RealtimeEvent()
     data class NudgeReceived(val senderName: String, val message: String, val timestamp: Long) : RealtimeEvent()
     data class CheerReceived(val senderName: String, val taskId: String, val taskTitle: String, val timestamp: Long) : RealtimeEvent()
+    data class FriendInvited(val fromName: String, val fromHandle: String, val toHandle: String, val squadName: String, val timestamp: Long) : RealtimeEvent()
+    data class SquadJoined(val memberName: String, val handle: String, val avatar: String, val timestamp: Long) : RealtimeEvent()
     data class PresenceUpdated(val onlineUserIds: Set<String>) : RealtimeEvent()
 }
 
 class SupabaseRealtimeClient(
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, t ->
+        Log.e("SupabaseRealtime", "Caught coroutine exception: ${t.message}", t)
+    })
 ) {
     private val tag = "SupabaseRealtime"
 
@@ -287,6 +292,61 @@ class SupabaseRealtimeClient(
         webSocket?.send(msg.toString())
     }
 
+    fun broadcastInvite(fromName: String, fromHandle: String, toHandle: String, squadName: String) {
+        val topic = "realtime:$currentChannel"
+        val ref = refCounter.incrementAndGet().toString()
+
+        val innerPayload = JSONObject().apply {
+            put("fromName", fromName)
+            put("fromHandle", fromHandle)
+            put("toHandle", toHandle)
+            put("squadName", squadName)
+            put("timestamp", System.currentTimeMillis())
+        }
+
+        val broadcastPayload = JSONObject().apply {
+            put("type", "broadcast")
+            put("event", "FRIEND_INVITED")
+            put("payload", innerPayload)
+        }
+
+        val msg = JSONObject().apply {
+            put("topic", topic)
+            put("event", "broadcast")
+            put("payload", broadcastPayload)
+            put("ref", ref)
+        }
+
+        webSocket?.send(msg.toString())
+    }
+
+    fun broadcastSquadJoin(memberName: String, handle: String, avatar: String) {
+        val topic = "realtime:$currentChannel"
+        val ref = refCounter.incrementAndGet().toString()
+
+        val innerPayload = JSONObject().apply {
+            put("memberName", memberName)
+            put("handle", handle)
+            put("avatar", avatar)
+            put("timestamp", System.currentTimeMillis())
+        }
+
+        val broadcastPayload = JSONObject().apply {
+            put("type", "broadcast")
+            put("event", "SQUAD_JOINED")
+            put("payload", innerPayload)
+        }
+
+        val msg = JSONObject().apply {
+            put("topic", topic)
+            put("event", "broadcast")
+            put("payload", broadcastPayload)
+            put("ref", ref)
+        }
+
+        webSocket?.send(msg.toString())
+    }
+
     // Handles incoming messages from Supabase Realtime (both Postgres CDC changes & broadcast events)
     private fun handleIncomingMessage(text: String) {
         try {
@@ -326,6 +386,25 @@ class SupabaseRealtimeClient(
                             val timestamp = data.optLong("timestamp", System.currentTimeMillis())
                             scope.launch {
                                 _events.emit(RealtimeEvent.CheerReceived(senderName, taskId, taskTitle, timestamp))
+                            }
+                        }
+                        "FRIEND_INVITED" -> {
+                            val fromName = data.optString("fromName")
+                            val fromHandle = data.optString("fromHandle")
+                            val toHandle = data.optString("toHandle")
+                            val squadName = data.optString("squadName")
+                            val timestamp = data.optLong("timestamp", System.currentTimeMillis())
+                            scope.launch {
+                                _events.emit(RealtimeEvent.FriendInvited(fromName, fromHandle, toHandle, squadName, timestamp))
+                            }
+                        }
+                        "SQUAD_JOINED" -> {
+                            val memberName = data.optString("memberName")
+                            val handle = data.optString("handle")
+                            val avatar = data.optString("avatar", "👤")
+                            val timestamp = data.optLong("timestamp", System.currentTimeMillis())
+                            scope.launch {
+                                _events.emit(RealtimeEvent.SquadJoined(memberName, handle, avatar, timestamp))
                             }
                         }
                     }

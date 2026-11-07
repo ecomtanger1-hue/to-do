@@ -75,4 +75,14 @@ interface SquadDoDao {
 
     @Query("DELETE FROM squad_activities WHERE id NOT IN (SELECT id FROM squad_activities ORDER BY timestamp DESC LIMIT 100)")
     suspend fun trimOldActivities()
+
+    // --- Friend Invitations ---
+    @Query("SELECT * FROM friend_invitations WHERE status = 'PENDING' ORDER BY timestamp DESC")
+    fun getPendingInvitationsFlow(): Flow<List<FriendInvitationEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertInvitation(invitation: FriendInvitationEntity)
+
+    @Query("UPDATE friend_invitations SET status = :status WHERE id = :inviteId")
+    suspend fun updateInvitationStatus(inviteId: String, status: String)
 }

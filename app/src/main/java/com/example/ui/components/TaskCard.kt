@@ -20,9 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ElectricBolt
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -43,11 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.TaskItem
-import com.example.data.model.TaskPriority
 import com.example.ui.theme.AmberFlame
-import com.example.ui.theme.Cyan400
 import com.example.ui.theme.Emerald400
-import com.example.ui.theme.RoseNudge
 
 @Composable
 fun TaskCard(
@@ -65,237 +59,165 @@ fun TaskCard(
     )
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (task.isCompleted) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
             } else {
-                MaterialTheme.colorScheme.surfaceVariant
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
             }
         ),
         modifier = modifier
             .fillMaxWidth()
             .testTag("task_card_${task.id}")
             .border(
-                width = if (task.isPact && !task.isCompleted) 1.5.dp else 1.dp,
-                color = if (task.isPact && !task.isCompleted) AmberFlame.copy(alpha = 0.8f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(16.dp)
+                width = 1.dp,
+                color = if (task.isPact && !task.isCompleted) {
+                    AmberFlame.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                },
+                shape = RoundedCornerShape(14.dp)
             )
     ) {
-        Column(
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+            // Minimalist Circular Checkbox
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(checkboxBg)
+                    .border(
+                        width = 1.5.dp,
+                        color = if (task.isCompleted) Emerald400 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        shape = CircleShape
+                    )
+                    .clickable { onToggle(task) }
+                    .testTag("task_checkbox_${task.id}")
             ) {
-                // Member Tag or Category
+                if (task.isCompleted) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Completed",
+                        tint = Color(0xFF022C22),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Task Content
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Category chip
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-                    ) {
-                        Text(
-                            text = "${task.category.emoji} ${task.category.label}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    // Priority Pill
-                    val priorityColor = when (task.priority) {
-                        TaskPriority.HIGH -> RoseNudge
-                        TaskPriority.MEDIUM -> AmberFlame
-                        TaskPriority.LOW -> Cyan400
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = priorityColor.copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            text = task.priority.name,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = priorityColor,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    // Pact indicator
-                    if (task.isPact) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = AmberFlame.copy(alpha = 0.2f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AmberFlame)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalFireDepartment,
-                                    contentDescription = "Pact",
-                                    tint = AmberFlame,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "PACT",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = AmberFlame
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Owner avatar & name if not current user
-                if (!isCurrentUser) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(text = task.userAvatar, fontSize = 14.sp)
-                        Text(
-                            text = task.userName,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Main Row: Checkbox, Title & Description
-            Row(
-                verticalAlignment = Alignment.Top,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Interactive Checkbox
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(checkboxBg)
-                        .border(
-                            width = 2.dp,
-                            color = if (task.isCompleted) Emerald400 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            shape = CircleShape
-                        )
-                        .clickable { onToggle(task) }
-                        .testTag("task_checkbox_${task.id}")
-                ) {
-                    if (task.isCompleted) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Completed",
-                            tint = Color(0xFF022C22),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
                     Text(
                         text = task.title,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (task.isCompleted) FontWeight.Normal else FontWeight.SemiBold,
+                        fontWeight = if (task.isCompleted) FontWeight.Normal else FontWeight.Medium,
                         textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
                         color = if (task.isCompleted) {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                         } else {
                             MaterialTheme.colorScheme.onSurface
-                        }
+                        },
+                        modifier = Modifier.weight(1f, fill = false)
                     )
 
-                    if (task.description.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = task.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    // Minimal Pact indicator
+                    if (task.isPact && !task.isCompleted) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = AmberFlame.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "🔥 Pact",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AmberFlame,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                // If friend's task, show their name subtly
+                if (!isCurrentUser) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${task.userAvatar} ${task.userName}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (task.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = task.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
 
-                    // Due Time & Cheers row
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Right side actions: Cheer counter + Delete
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Cheer Button (always available to encourage)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onCheer(task) }
+                        .testTag("cheer_button_${task.id}")
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                     ) {
-                        Text(
-                            text = "⏱️ ${task.dueDate}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        )
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            // Cheer / High-five Button
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.6f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onCheer(task) }
-                                    .testTag("cheer_button_${task.id}")
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(text = "👏", fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "${task.cheerCount}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-
-                            // Delete button if current user
-                            if (isCurrentUser) {
-                                IconButton(
-                                    onClick = { onDelete(task.id) },
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .testTag("delete_task_${task.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete Task",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
+                        Text(text = "👏", fontSize = 12.sp)
+                        if (task.cheerCount > 0) {
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "${task.cheerCount}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
+                    }
+                }
+
+                // Delete button for owner
+                if (isCurrentUser) {
+                    IconButton(
+                        onClick = { onDelete(task.id) },
+                        modifier = Modifier
+                            .size(28.dp)
+                            .testTag("delete_task_${task.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                 }
             }

@@ -18,7 +18,8 @@ enum class ActivityType {
     TASK_CREATED,
     NUDGE_SENT,
     CHEER_SENT,
-    STREAK_ACHIEVED
+    STREAK_ACHIEVED,
+    FRIEND_JOINED
 }
 
 enum class RealtimeStatus {
@@ -27,6 +28,12 @@ enum class RealtimeStatus {
     CONNECTED,
     SYNCING,
     ERROR
+}
+
+enum class InviteStatus {
+    PENDING,
+    ACCEPTED,
+    REJECTED
 }
 
 data class TaskItem(
@@ -55,6 +62,7 @@ data class SquadMember(
     val id: String,
     val squadId: String = "squad_general",
     val name: String,
+    val handle: String = "",
     val avatar: String = "👤",
     val role: String = "Member",
     val status: String = "Active",
@@ -92,4 +100,38 @@ data class SupabaseConfig(
     val anonKey: String = "",
     val channelName: String = "squad_accountability",
     val isEnabled: Boolean = false
+)
+
+data class UserProfile(
+    val id: String,
+    val name: String,
+    val handle: String,
+    val email: String = "",
+    val avatar: String = "🚀",
+    val bio: String = "Accountability Partner",
+    val streakDays: Int = 1,
+    val tasksCompleted: Int = 0
+)
+
+data class UserSearchResult(
+    val id: String,
+    val name: String,
+    val handle: String,
+    val avatar: String,
+    val focusArea: String,
+    val streakDays: Int,
+    val isAlreadyInSquad: Boolean = false
+)
+
+data class FriendInvitation(
+    val id: String,
+    val fromUserId: String,
+    val fromUserName: String,
+    val fromUserHandle: String,
+    val fromUserAvatar: String,
+    val toUserHandle: String,
+    val squadId: String = "squad_general",
+    val squadName: String = "Focus Circle",
+    val status: InviteStatus = InviteStatus.PENDING,
+    val timestamp: Long = System.currentTimeMillis()
 )

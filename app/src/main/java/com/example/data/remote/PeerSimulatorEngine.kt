@@ -7,10 +7,13 @@ import com.example.data.model.SquadActivity
 import com.example.data.model.TaskCategory
 import com.example.data.model.TaskItem
 import com.example.data.model.TaskPriority
+import com.example.data.model.UserSearchResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineExceptionHandler
+import android.util.Log
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -18,26 +21,65 @@ import java.util.UUID
 class PeerSimulatorEngine(
     private val dao: SquadDoDao,
     private val realtimeClient: SupabaseRealtimeClient,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, t ->
+        Log.e("PeerSimulatorEngine", "Caught coroutine exception: ${t.message}", t)
+    })
 ) {
     private var simulationJob: Job? = null
     var isEnabled: Boolean = true
 
+    // Discoverable Directory of potential accountability buddies
+    private val discoverableDirectory = listOf(
+        UserSearchResult(
+            id = "user_elena",
+            name = "Elena Rostova",
+            handle = "@elena_fit",
+            avatar = "🧗",
+            focusArea = "Triathlon & Daily Habits",
+            streakDays = 14,
+            isAlreadyInSquad = false
+        ),
+        UserSearchResult(
+            id = "user_david",
+            name = "David Kim",
+            handle = "@david_code",
+            avatar = "💻",
+            focusArea = "Distributed Systems & LeetCode",
+            streakDays = 21,
+            isAlreadyInSquad = false
+        ),
+        UserSearchResult(
+            id = "user_samira",
+            name = "Samira Khan",
+            handle = "@samira_zen",
+            avatar = "🧘",
+            focusArea = "Daily Writing & Meditation",
+            streakDays = 9,
+            isAlreadyInSquad = false
+        ),
+        UserSearchResult(
+            id = "user_lucas",
+            name = "Lucas Vance",
+            handle = "@lucas_v",
+            avatar = "🎧",
+            focusArea = "Heavy Lifting & Focus Audiobooks",
+            streakDays = 6,
+            isAlreadyInSquad = false
+        )
+    )
+
     fun start() {
         if (simulationJob?.isActive == true) return
         simulationJob = scope.launch {
-            // Seed initial peers & initial tasks if empty
             seedInitialDataIfNecessary()
 
             while (isActive) {
-                delay(22_000) // Every ~22 seconds, a peer interacts
+                delay(22_000)
                 if (!isEnabled) continue
 
                 try {
                     performRandomPeerAction()
-                } catch (e: Exception) {
-                    // Ignore simulation error
-                }
+                } catch (_: Exception) {}
             }
         }
     }
@@ -56,6 +98,7 @@ class PeerSimulatorEngine(
                 id = "user_me",
                 squadId = "squad_general",
                 name = "You",
+                handle = "@pact_hero",
                 avatar = "🚀",
                 role = "Squad Member",
                 status = "Focus Mode 🔥",
@@ -68,6 +111,7 @@ class PeerSimulatorEngine(
                 id = "user_alex",
                 squadId = "squad_general",
                 name = "Alex Rivera",
+                handle = "@alex_r",
                 avatar = "🦊",
                 role = "Accountability Captain",
                 status = "Crushing sprints 💻",
@@ -80,6 +124,7 @@ class PeerSimulatorEngine(
                 id = "user_maya",
                 squadId = "squad_general",
                 name = "Maya Chen",
+                handle = "@maya_c",
                 avatar = "⚡",
                 role = "Partner",
                 status = "Gym session 🏋️",
@@ -92,6 +137,7 @@ class PeerSimulatorEngine(
                 id = "user_jordan",
                 squadId = "squad_general",
                 name = "Jordan Blake",
+                handle = "@jordan_b",
                 avatar = "🦁",
                 role = "Partner",
                 status = "Deep reading 📚",
@@ -335,7 +381,6 @@ class PeerSimulatorEngine(
         val peerIds = listOf("user_alex", "user_maya", "user_jordan")
         val randomPeer = peerIds.random()
 
-        // Get uncompleted tasks of this peer
         val tasks = dao.getAllTasks().filter { it.userId == randomPeer }
         val uncompleted = tasks.filter { !it.isCompleted }
 
@@ -344,12 +389,10 @@ class PeerSimulatorEngine(
             val now = System.currentTimeMillis()
             dao.setTaskCompleted(taskToComplete.id, true, now)
 
-            // Update member counts
             val currentTasks = dao.getAllTasks().filter { it.userId == randomPeer }
             val completedCount = currentTasks.count { it.isCompleted }
             dao.updateMemberTaskCounts(randomPeer, currentTasks.size, completedCount)
 
-            // Log activity
             val act = SquadActivity(
                 id = UUID.randomUUID().toString(),
                 squadId = "squad_general",
@@ -362,7 +405,6 @@ class PeerSimulatorEngine(
             )
             dao.insertActivity(com.example.data.local.SquadActivityEntity.fromDomain(act))
 
-            // Emit realtime event via client
             realtimeClient.emitLocalEvent(
                 RealtimeEvent.TaskUpdated(
                     taskId = taskToComplete.id,
@@ -375,11 +417,125 @@ class PeerSimulatorEngine(
         }
     }
 
-    // Called when the user checks off a task: peers react with cheers!
+    suspend fun searchUsers(query: String): List<UserSearchResult> {
+        val q = query.trim().lowercase().removePrefix("@")
+        val currentMembers = dao.getAllMembers()
+        val currentMemberIds = currentMembers.map { it.id }.toSet()
+
+        val squadResults = currentMembers.map {
+            UserSearchResult(
+                id = it.id,
+                name = it.name,
+                handle = it.handle.ifBlank { "@${it.name.lowercase().replace(" ", "_")}" },
+                avatar = it.avatar,
+                focusArea = it.status,
+                streakDays = it.streakDays,
+                isAlreadyInSquad = true
+            )
+        }
+
+        val directoryResults = discoverableDirectory.filter { !currentMemberIds.contains(it.id) }
+
+        val allPool = squadResults + directoryResults
+        return if (q.isBlank()) {
+            allPool
+        } else {
+            allPool.filter {
+                it.name.lowercase().contains(q) ||
+                it.handle.lowercase().contains(q) ||
+                it.focusArea.lowercase().contains(q)
+            }
+        }
+    }
+
+    fun onUserInvitedFriend(candidate: UserSearchResult, inviterName: String, inviterHandle: String) {
+        scope.launch {
+            // Broadcast invitation
+            realtimeClient.broadcastInvite(
+                fromName = inviterName,
+                fromHandle = inviterHandle,
+                toHandle = candidate.handle,
+                squadName = "Focus Circle"
+            )
+
+            // Simulate the friend happily accepting the invite after 3 seconds!
+            delay(3_000)
+
+            val newMember = SquadMemberEntity(
+                id = candidate.id,
+                squadId = "squad_general",
+                name = candidate.name,
+                handle = candidate.handle,
+                avatar = candidate.avatar,
+                role = "Accountability Partner",
+                status = candidate.focusArea,
+                isOnline = true,
+                streakDays = candidate.streakDays,
+                tasksCount = 2,
+                completedCount = 0
+            )
+            dao.insertMember(newMember)
+
+            // Add their tasks
+            val tasks = listOf(
+                TaskItem(
+                    id = "task_${candidate.id}_1",
+                    squadId = "squad_general",
+                    userId = candidate.id,
+                    userName = candidate.name,
+                    userAvatar = candidate.avatar,
+                    title = "Daily 45m Focus Session (${candidate.focusArea})",
+                    description = "Accountability goal for the squad",
+                    isCompleted = false,
+                    priority = TaskPriority.HIGH,
+                    category = TaskCategory.WORK,
+                    dueDate = "Today 7:00 PM",
+                    isPact = true
+                ),
+                TaskItem(
+                    id = "task_${candidate.id}_2",
+                    squadId = "squad_general",
+                    userId = candidate.id,
+                    userName = candidate.name,
+                    userAvatar = candidate.avatar,
+                    title = "Hydration & Health check-in",
+                    isCompleted = false,
+                    priority = TaskPriority.LOW,
+                    category = TaskCategory.HEALTH,
+                    dueDate = "Today"
+                )
+            )
+            dao.insertTasks(tasks.map { com.example.data.local.TaskEntity.fromDomain(it) })
+
+            // Log activity
+            val act = SquadActivity(
+                id = UUID.randomUUID().toString(),
+                squadId = "squad_general",
+                userId = candidate.id,
+                userName = candidate.name,
+                userAvatar = candidate.avatar,
+                actionType = ActivityType.FRIEND_JOINED,
+                targetUserName = inviterName,
+                message = "${candidate.name} accepted your invite and joined the squad! 🎉",
+                timestamp = System.currentTimeMillis()
+            )
+            dao.insertActivity(com.example.data.local.SquadActivityEntity.fromDomain(act))
+
+            realtimeClient.emitLocalEvent(
+                RealtimeEvent.SquadJoined(
+                    memberName = candidate.name,
+                    handle = candidate.handle,
+                    avatar = candidate.avatar,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
     fun onUserCompletedTask(taskTitle: String) {
         if (!isEnabled) return
         scope.launch {
-            delay(2_500) // Realistic 2.5s delay for friend reaction
+            delay(2_500)
             val cheeringPeer = listOf(
                 Pair("Alex Rivera", "🦊"),
                 Pair("Maya Chen", "⚡")
@@ -415,11 +571,10 @@ class PeerSimulatorEngine(
         }
     }
 
-    // Called when the user nudges a friend: friend answers back!
     fun onUserNudgedFriend(friendName: String) {
         if (!isEnabled) return
         scope.launch {
-            delay(3_500) // Friend response time
+            delay(3_500)
             val responses = listOf(
                 "Got your nudge! Putting my phone on Do Not Disturb right now 💪",
                 "Thanks for holding me accountable! Closing Slack and finishing it now ⚡",

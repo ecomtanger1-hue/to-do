@@ -42,4 +42,34 @@ class ExampleUnitTest {
     assertEquals(TaskPriority.HIGH, task.priority)
     assertEquals(TaskCategory.FITNESS, task.category)
   }
+
+  @Test
+  fun testUserProfileAndHandle() {
+    val profile = com.example.data.model.UserProfile(
+      id = "u_1",
+      name = "Sarah Miller",
+      handle = "@sarah_m",
+      email = "sarah@example.com",
+      avatar = "🚀"
+    )
+    assertEquals("@sarah_m", profile.handle)
+    assertEquals("Sarah Miller", profile.name)
+    assertEquals("🚀", profile.avatar)
+  }
+
+  @Test
+  fun testUserSearchResult() {
+    val search = com.example.data.model.UserSearchResult(
+      id = "u_2",
+      name = "Elena Rostova",
+      handle = "@elena_fit",
+      avatar = "🧗",
+      focusArea = "Triathlon & Daily Habits",
+      streakDays = 14,
+      isAlreadyInSquad = false
+    )
+    assertEquals("@elena_fit", search.handle)
+    assertFalse(search.isAlreadyInSquad)
+    assertEquals(14, search.streakDays)
+  }
 }

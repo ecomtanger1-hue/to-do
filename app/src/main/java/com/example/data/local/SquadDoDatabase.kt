@@ -9,9 +9,10 @@ import androidx.room.RoomDatabase
     entities = [
         TaskEntity::class,
         SquadMemberEntity::class,
-        SquadActivityEntity::class
+        SquadActivityEntity::class,
+        FriendInvitationEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SquadDoDatabase : RoomDatabase() {
@@ -26,7 +27,7 @@ abstract class SquadDoDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     SquadDoDatabase::class.java,
-                    "squaddo_database.db"
+                    "squaddo_v2.db"
                 ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance

@@ -18,35 +18,47 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.SquadUiState
 import com.example.ui.theme.AmberFlame
-import com.example.ui.theme.Cyan400
 import com.example.ui.theme.Emerald400
 
 @Composable
 fun LeaderboardScreen(
     state: SquadUiState,
+    onOpenFindFriends: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Sort members by completed count descending, then streak descending
+    val clipboardManager = LocalClipboardManager.current
+    var copiedCode by remember { mutableStateOf(false) }
+
     val sortedMembers = state.members.sortedWith(
         compareByDescending<com.example.data.model.SquadMember> { member ->
             state.tasks.count { it.userId == member.id && it.isCompleted }
@@ -58,51 +70,73 @@ fun LeaderboardScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = modifier.fillMaxSize().testTag("leaderboard_screen")
     ) {
-        // Hero Card
+        // Top Card: Squad Code & Find Friends
         item {
             Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = AmberFlame.copy(alpha = 0.2f),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.EmojiEvents,
-                                    contentDescription = "Leaderboard",
-                                    tint = AmberFlame,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "Squad Code",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "SQUAD-7788",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = Emerald400
+                            )
+                            IconButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString("SQUAD-7788"))
+                                    copiedCode = true
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Emerald400, modifier = Modifier.size(15.dp))
                             }
                         }
-                        Column {
-                            Text(
-                                text = "Accountability Standings",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Ranked by consistency & tasks completed",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onOpenFindFriends,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Emerald400),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Emerald400.copy(alpha = 0.5f)),
+                        modifier = Modifier.testTag("button_open_find_friends")
+                    ) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "Find Friends", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        // Leaderboard items
+        // Leaderboard Section Header
+        item {
+            Text(
+                text = "Accountability Rankings",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        // Leaderboard List
         itemsIndexed(sortedMembers) { index, member ->
             val memberTasks = state.tasks.filter { it.userId == member.id }
             val completed = memberTasks.count { it.isCompleted }
@@ -110,7 +144,7 @@ fun LeaderboardScreen(
             val rate = if (total > 0) completed.toFloat() / total else 0f
             val isUser = member.id == state.currentUserId
 
-            val medal = when (index) {
+            val rankLabel = when (index) {
                 0 -> "🥇"
                 1 -> "🥈"
                 2 -> "🥉"
@@ -118,16 +152,16 @@ fun LeaderboardScreen(
             }
 
             Card(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isUser) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = if (isUser) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(
                         1.dp,
-                        if (index == 0) AmberFlame.copy(alpha = 0.7f) else if (isUser) Emerald400 else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        RoundedCornerShape(20.dp)
+                        if (isUser) Emerald400.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        RoundedCornerShape(14.dp)
                     )
             ) {
                 Row(
@@ -135,93 +169,63 @@ fun LeaderboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        // Rank badge
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = medal,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = if (index < 3) 18.sp else 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
+                        // Rank label
+                        Text(
+                            text = rankLabel,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
 
                         // Avatar
-                        Text(text = member.avatar, fontSize = 28.sp)
+                        Text(text = member.avatar, fontSize = 22.sp)
 
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = member.name,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 if (isUser) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Emerald400.copy(alpha = 0.2f)
-                                    ) {
-                                        Text(
-                                            text = "YOU",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = Emerald400,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                        )
-                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "(You)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Emerald400,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                             Text(
-                                text = "$completed of $total done (${(rate * 100).toInt()}%)",
+                                text = "$completed/$total done (${(rate * 100).toInt()}%)",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = { rate },
-                                color = if (index == 0) AmberFlame else Emerald400,
-                                trackColor = MaterialTheme.colorScheme.background,
-                                modifier = Modifier
-                                    .fillMaxWidth(0.9f)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
                             )
                         }
                     }
 
-                    // Streak
+                    // Streak Badge
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = AmberFlame.copy(alpha = 0.15f)
+                        shape = RoundedCornerShape(8.dp),
+                        color = AmberFlame.copy(alpha = 0.12f)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Text(
+                            text = "🔥 ${member.streakDays}d",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            color = AmberFlame,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = AmberFlame, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = "${member.streakDays}d",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black,
-                                color = AmberFlame
-                            )
-                        }
+                        )
                     }
                 }
             }

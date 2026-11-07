@@ -1,20 +1,26 @@
 package com.example.data.repository
 
+import com.example.data.local.FriendInvitationEntity
 import com.example.data.local.PreferencesManager
 import com.example.data.local.SquadActivityEntity
 import com.example.data.local.SquadDoDao
 import com.example.data.local.SquadMemberEntity
 import com.example.data.local.TaskEntity
 import com.example.data.model.ActivityType
+import com.example.data.model.FriendInvitation
+import com.example.data.model.InviteStatus
 import com.example.data.model.RealtimeStatus
 import com.example.data.model.SquadActivity
 import com.example.data.model.SquadMember
 import com.example.data.model.SupabaseConfig
 import com.example.data.model.TaskItem
+import com.example.data.model.UserSearchResult
 import com.example.data.remote.PeerSimulatorEngine
 import com.example.data.remote.RealtimeEvent
 import com.example.data.remote.SupabaseRealtimeClient
 import com.example.data.remote.SupabaseRestClient
+import kotlinx.coroutines.CoroutineExceptionHandler
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -30,9 +36,19 @@ class SquadRepository(
     val realtimeClient: SupabaseRealtimeClient,
     private val restClient: SupabaseRestClient,
     val simulatorEngine: PeerSimulatorEngine,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, t ->
+        Log.e("SquadRepository", "Caught coroutine exception: ${t.message}", t)
+    })
 ) {
     val realtimeStatus: StateFlow<RealtimeStatus> = realtimeClient.status
+
+    val isLoggedInFlow: Flow<Boolean> = preferencesManager.isLoggedInFlow
+    val userIdFlow: Flow<String> = preferencesManager.userIdFlow
+    val userNameFlow: Flow<String> = preferencesManager.userNameFlow
+    val userHandleFlow: Flow<String> = preferencesManager.userHandleFlow
+    val userEmailFlow: Flow<String> = preferencesManager.userEmailFlow
+    val userAvatarFlow: Flow<String> = preferencesManager.userAvatarFlow
+    val userBioFlow: Flow<String> = preferencesManager.userBioFlow
 
     val tasksFlow: Flow<List<TaskItem>> = dao.getTasksForSquadFlow("squad_general").map { entities ->
         entities.map { it.toDomain() }
@@ -46,11 +62,12 @@ class SquadRepository(
         entities.map { it.toDomain() }
     }
 
+    val invitationsFlow: Flow<List<FriendInvitation>> = dao.getPendingInvitationsFlow().map { entities ->
+        entities.map { it.toDomain() }
+    }
+
     val supabaseConfigFlow: Flow<SupabaseConfig> = preferencesManager.supabaseConfigFlow
     val simulatorEnabledFlow: Flow<Boolean> = preferencesManager.simulatorEnabledFlow
-    val userIdFlow: Flow<String> = preferencesManager.userIdFlow
-    val userNameFlow: Flow<String> = preferencesManager.userNameFlow
-    val userAvatarFlow: Flow<String> = preferencesManager.userAvatarFlow
 
     init {
         // Start simulated peer interactions
@@ -86,7 +103,6 @@ class SquadRepository(
         when (event) {
             is RealtimeEvent.TaskUpdated -> {
                 dao.setTaskCompleted(event.taskId, event.isCompleted, event.completedAt)
-                // Recalculate member stats
                 val allTasks = dao.getAllTasks()
                 val userTasks = allTasks.filter { it.userId == event.userId }
                 if (userTasks.isNotEmpty()) {
@@ -125,10 +141,122 @@ class SquadRepository(
                 )
                 dao.insertActivity(SquadActivityEntity.fromDomain(act))
             }
+            is RealtimeEvent.FriendInvited -> {
+                val myHandle = userHandleFlow.first()
+                if (event.toHandle.equals(myHandle, ignoreCase = true)) {
+                    val invite = FriendInvitation(
+                        id = UUID.randomUUID().toString(),
+                        fromUserId = "invited_peer",
+                        fromUserName = event.fromName,
+                        fromUserHandle = event.fromHandle,
+                        fromUserAvatar = "👋",
+                        toUserHandle = event.toHandle,
+                        squadName = event.squadName,
+                        status = InviteStatus.PENDING,
+                        timestamp = event.timestamp
+                    )
+                    dao.insertInvitation(FriendInvitationEntity.fromDomain(invite))
+                }
+            }
+            is RealtimeEvent.SquadJoined -> {
+                val act = SquadActivity(
+                    id = UUID.randomUUID().toString(),
+                    squadId = "squad_general",
+                    userId = "join_event",
+                    userName = event.memberName,
+                    userAvatar = event.avatar,
+                    actionType = ActivityType.FRIEND_JOINED,
+                    message = "${event.memberName} (${event.handle}) joined the accountability circle! 🎉",
+                    timestamp = event.timestamp
+                )
+                dao.insertActivity(SquadActivityEntity.fromDomain(act))
+            }
             is RealtimeEvent.PresenceUpdated -> {
                 // Online users presence
             }
         }
+    }
+
+    suspend fun createAccount(
+        name: String,
+        handle: String,
+        email: String,
+        avatar: String,
+        bio: String
+    ) {
+        val cleanHandle = if (handle.startsWith("@")) handle else "@$handle"
+        preferencesManager.saveUserAccount(
+            userId = "user_me",
+            name = name.trim(),
+            handle = cleanHandle.trim(),
+            email = email.trim(),
+            avatar = avatar,
+            bio = bio.trim()
+        )
+
+        val meMember = SquadMemberEntity(
+            id = "user_me",
+            squadId = "squad_general",
+            name = name.trim(),
+            handle = cleanHandle.trim(),
+            avatar = avatar,
+            role = "Accountability Partner",
+            status = bio.ifBlank { "Focus Mode 🔥" },
+            isOnline = true,
+            streakDays = 5,
+            tasksCount = 3,
+            completedCount = 1
+        )
+        dao.insertMember(meMember)
+
+        realtimeClient.broadcastSquadJoin(name, cleanHandle, avatar)
+    }
+
+    suspend fun logOut() {
+        preferencesManager.logOut()
+    }
+
+    suspend fun searchUsers(query: String): List<UserSearchResult> {
+        return simulatorEngine.searchUsers(query)
+    }
+
+    suspend fun inviteFriend(candidate: UserSearchResult) {
+        val inviterName = userNameFlow.first()
+        val inviterHandle = userHandleFlow.first()
+        simulatorEngine.onUserInvitedFriend(candidate, inviterName, inviterHandle)
+    }
+
+    suspend fun acceptInvitation(invitation: FriendInvitation) {
+        dao.updateInvitationStatus(invitation.id, InviteStatus.ACCEPTED.name)
+        val act = SquadActivity(
+            id = UUID.randomUUID().toString(),
+            squadId = "squad_general",
+            userId = invitation.fromUserId,
+            userName = invitation.fromUserName,
+            userAvatar = invitation.fromUserAvatar,
+            actionType = ActivityType.FRIEND_JOINED,
+            message = "Accepted accountability invite from ${invitation.fromUserName}! 🤝",
+            timestamp = System.currentTimeMillis()
+        )
+        dao.insertActivity(SquadActivityEntity.fromDomain(act))
+    }
+
+    suspend fun joinSquadByCode(code: String): Boolean {
+        val cleanCode = code.trim().uppercase()
+        if (cleanCode.length < 4) return false
+
+        val act = SquadActivity(
+            id = UUID.randomUUID().toString(),
+            squadId = "squad_general",
+            userId = "user_me",
+            userName = userNameFlow.first(),
+            userAvatar = userAvatarFlow.first(),
+            actionType = ActivityType.FRIEND_JOINED,
+            message = "Joined squad '$cleanCode'! Let's stay accountable! 🔥",
+            timestamp = System.currentTimeMillis()
+        )
+        dao.insertActivity(SquadActivityEntity.fromDomain(act))
+        return true
     }
 
     suspend fun toggleTaskCompletion(task: TaskItem) {
@@ -210,14 +338,12 @@ class SquadRepository(
             isPact = isPact
         )
 
-        // 1. Local insert
         dao.insertTask(TaskEntity.fromDomain(newTask))
 
         val allUserTasks = dao.getAllTasks().filter { it.userId == userId }
         val completedCount = allUserTasks.count { it.isCompleted }
         dao.updateMemberTaskCounts(userId, allUserTasks.size, completedCount)
 
-        // 2. Activity log
         val activity = SquadActivity(
             id = UUID.randomUUID().toString(),
             squadId = "squad_general",
@@ -230,7 +356,6 @@ class SquadRepository(
         )
         dao.insertActivity(SquadActivityEntity.fromDomain(activity))
 
-        // 3. Supabase REST & Realtime broadcast
         scope.launch {
             val config = preferencesManager.supabaseConfigFlow.first()
             if (config.isEnabled && config.url.isNotBlank()) {
@@ -267,10 +392,7 @@ class SquadRepository(
         )
         dao.insertActivity(SquadActivityEntity.fromDomain(activity))
 
-        // Broadcast over Realtime WebSocket
         realtimeClient.broadcastNudge(senderName, targetMember.name, message)
-
-        // Trigger peer response
         simulatorEngine.onUserNudgedFriend(targetMember.name)
 
         scope.launch {
